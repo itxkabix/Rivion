@@ -10,7 +10,6 @@ def detect_faces(image_bytes: bytes):
     # Convert bytes → np array → BGR image
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(
         gray,
@@ -18,10 +17,9 @@ def detect_faces(image_bytes: bytes):
         minNeighbors=5,
         minSize=(80, 80)
     )
-
+    
     crops = []
     for (x, y, w, h) in faces:
         face = img[y:y + h, x:x + w]
         crops.append(face)
-
     return crops

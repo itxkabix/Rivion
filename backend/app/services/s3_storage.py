@@ -19,7 +19,6 @@ async def upload_image_to_s3(base64_image: str, session_id: str) -> str:
         # Decode base64
         if ',' in base64_image:
             base64_image = base64_image.split(',')[1]
-        
         image_data = base64.b64decode(base64_image)
         
         # Upload to S3
@@ -33,7 +32,6 @@ async def upload_image_to_s3(base64_image: str, session_id: str) -> str:
         
         logger.info(f"Image uploaded to S3: {key}")
         return f"s3://{settings.AWS_S3_BUCKET}/{key}"
-        
     except Exception as e:
         logger.error(f"S3 upload error: {e}")
         raise

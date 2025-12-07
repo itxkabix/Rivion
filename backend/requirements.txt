@@ -15,4 +15,4 @@ aiofiles==23.2.1
 httpx==0.25.1
 onnxruntime==1.16.0
 torch==2.9.1
-pinecone
+pinecone-client==3.1.0

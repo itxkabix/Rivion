@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
 import json
 import logging
-
+import numpy as np
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,6 @@ SessionLocal = sessionmaker(bind=engine)
 # Models
 class SessionUser(Base):
     __tablename__ = 'session_user'
-    
     session_id = Column(String, primary_key=True)
     user_name = Column(String)
     captured_image_base64 = Column(String)
@@ -30,7 +29,6 @@ class SessionUser(Base):
 
 class EmotionLog(Base):
     __tablename__ = 'emotion_log'
-    
     emotion_id = Column(String, primary_key=True)
     image_id = Column(String)
     session_id = Column(String)
@@ -41,7 +39,6 @@ class EmotionLog(Base):
 
 class SessionAggregatedEmotion(Base):
     __tablename__ = 'session_aggregated_emotion'
-    
     aggregation_id = Column(String, primary_key=True)
     session_id = Column(String, unique=True)
     dominant_emotion = Column(String)
@@ -59,7 +56,6 @@ def insert_session_user(session_id: str, user_name: str, captured_image_base64: 
     try:
         session = SessionLocal()
         expires_at = datetime.utcnow() + timedelta(hours=settings.SESSION_EXPIRY_HOURS)
-        
         user = SessionUser(
             session_id=session_id,
             user_name=user_name,
@@ -68,7 +64,6 @@ def insert_session_user(session_id: str, user_name: str, captured_image_base64: 
             expires_at=expires_at,
             status='searching'
         )
-        
         session.add(user)
         session.commit()
         session.close()
@@ -82,7 +77,6 @@ def insert_emotion_log(image_id: str, session_id: str, emotion_label: str, confi
     try:
         import uuid
         session = SessionLocal()
-        
         log = EmotionLog(
             emotion_id=str(uuid.uuid4()),
             image_id=image_id,
@@ -91,7 +85,6 @@ def insert_emotion_log(image_id: str, session_id: str, emotion_label: str, confi
             confidence=confidence,
             emotion_distribution=emotion_distribution,
         )
-        
         session.add(log)
         session.commit()
         session.close()
@@ -104,7 +97,6 @@ def insert_aggregated_emotion(session_id: str, dominant_emotion: str, emotion_co
     try:
         import uuid
         session = SessionLocal()
-        
         agg = SessionAggregatedEmotion(
             aggregation_id=str(uuid.uuid4()),
             session_id=session_id,
@@ -113,7 +105,6 @@ def insert_aggregated_emotion(session_id: str, dominant_emotion: str, emotion_co
             emotion_distribution=emotion_distribution,
             statement=statement,
         )
-        
         session.add(agg)
         session.commit()
         session.close()

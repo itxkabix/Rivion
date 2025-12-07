@@ -1,10 +1,13 @@
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import base64
-from app.services.vector_db import store_embedding, search_similar_faces
+from datetime import datetime
+import logging
+from app.services.vector_db import store_embedding, search_similar_faces, delete_session_vectors
 from app.services.face_detection import detect_faces
 from app.services.embedding import extract_embedding
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["search"])
 
 class SearchRequest(BaseModel):

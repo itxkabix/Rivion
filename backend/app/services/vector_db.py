@@ -49,7 +49,6 @@ async def store_embedding(session_id: str, embedding: List[float], metadata: Dic
         
         logger.info(f"Stored embedding: {vector_id}")
         return vector_id
-        
     except Exception as e:
         logger.error(f"Error storing embedding: {e}")
         raise
@@ -80,7 +79,6 @@ async def search_similar_faces(embedding: List[float], top_k: int = 10) -> List[
         
         logger.info(f"Found {len(matches)} similar faces")
         return matches
-        
     except Exception as e:
         logger.error(f"Error searching embeddings: {e}")
         raise
@@ -108,7 +106,6 @@ async def delete_session_vectors(session_id: str) -> bool:
             logger.info(f"Deleted {len(vector_ids)} vectors for session {session_id}")
         
         return True
-        
     except Exception as e:
         logger.error(f"Error deleting vectors: {e}")
         raise
