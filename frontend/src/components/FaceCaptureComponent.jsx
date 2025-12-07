@@ -1,164 +1,277 @@
-import React, { useRef, useEffect, useState } from 'react';
-import * as blazeface from '@tensorflow-models/blazeface';
-import * as tf from '@tensorflow/tfjs';
+import React, { useEffect, useRef, useState } from 'react';
+import * as faceapi from 'face-api.js';
+import '../styles/FaceCapture.css';
 
 const FaceCaptureComponent = ({ onCapture }) => {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
-    const [model, setModel] = useState(null);
+    const displayCanvasRef = useRef(null);
     const [faceDetected, setFaceDetected] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [facesCount, setFacesCount] = useState(0);
+    const [modelsLoaded, setModelsLoaded] = useState(false);
+    const [isStreaming, setIsStreaming] = useState(false);
+    const [faceQuality, setFaceQuality] = useState('');
+    const detectionIntervalRef = useRef(null);
 
+    // Load face-api models
     useEffect(() => {
-        const initializeCamera = async () => {
+        const loadModels = async () => {
             try {
-                setLoading(true);
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
 
-                // Load Blazeface model
-                const blazeFaceModel = await blazeface.load();
-                setModel(blazeFaceModel);
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+                    faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL),
+                ]);
 
-                // Access webcam
+                setModelsLoaded(true);
+                console.log('✅ All face detection models loaded');
+            } catch (error) {
+                console.error('❌ Error loading models:', error);
+                alert('Failed to load face detection models. Please refresh the page.');
+            }
+        };
+
+        loadModels();
+    }, []);
+
+    // Start camera stream
+    useEffect(() => {
+        if (!modelsLoaded) return;
+
+        const startCamera = async () => {
+            try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 640, height: 480 },
-                    audio: false,
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    },
                 });
 
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
+                    videoRef.current.onloadedmetadata = () => {
+                        videoRef.current.play();
+                        setIsStreaming(true);
+                    };
                 }
-
-                setLoading(false);
-            } catch (err) {
-                setError('Camera access denied or not available');
-                console.error('Error initializing camera:', err);
-                setLoading(false);
+            } catch (error) {
+                console.error('❌ Camera access error:', error);
+                alert('Please allow camera access to use this app.');
             }
         };
 
-        initializeCamera();
-    }, []);
-
-    useEffect(() => {
-        if (!model || !videoRef.current) return;
-
-        let animationId;
-
-        const detectFaces = async () => {
-            const video = videoRef.current;
-            const canvas = canvasRef.current;
-            const ctx = canvas.getContext('2d');
-
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                // Draw video to canvas
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0);
-
-                // Detect faces
-                const predictions = await model.estimateFaces(video, false);
-
-                if (predictions.length > 0) {
-                    setFaceDetected(true);
-
-                    // Draw bounding box around face
-                    const face = predictions[0];
-                    const start = face.start;
-                    const end = face.end;
-                    const width = end[0] - start[0];
-                    const height = end[1] - start[1];
-
-                    // Green bounding box
-                    ctx.strokeStyle = '#00FF00';
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(start[0], start[1], width, height);
-
-                    // Draw landmarks
-                    ctx.fillStyle = '#00FF00';
-                    face.landmarks.forEach((landmark) => {
-                        ctx.beginPath();
-                        ctx.arc(landmark[0], landmark[1], 5, 0, 2 * Math.PI);
-                        ctx.fill();
-                    });
-                } else {
-                    setFaceDetected(false);
-                }
-            }
-
-            animationId = requestAnimationFrame(detectFaces);
-        };
-
-        detectFaces();
+        startCamera();
 
         return () => {
-            if (animationId) cancelAnimationFrame(animationId);
+            if (videoRef.current && videoRef.current.srcObject) {
+                videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+                setIsStreaming(false);
+            }
         };
-    }, [model]);
+    }, [modelsLoaded]);
 
-    const handleCapture = () => {
-        if (!canvasRef.current || !faceDetected) {
-            alert('Please ensure your face is visible in the camera');
+    // Real-time face detection with visualization
+    useEffect(() => {
+        if (!modelsLoaded || !isStreaming) return;
+
+        const detectFaces = async () => {
+            if (!videoRef.current || !displayCanvasRef.current) return;
+
+            try {
+                const video = videoRef.current;
+                const canvas = displayCanvasRef.current;
+
+                // Detect faces with all features
+                const detections = await faceapi
+                    .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceExpressions()
+                    .withAgeAndGender();
+
+                // Set canvas dimensions
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                // Clear canvas
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw all detections
+                if (detections.length > 0) {
+                    // Draw boxes and landmarks
+                    faceapi.draw.drawDetections(canvas, detections);
+                    faceapi.draw.drawFaceLandmarks(canvas, detections);
+
+                    // Draw expressions
+                    const displaySize = { width: video.videoWidth, height: video.videoHeight };
+                    const resizedDetections = faceapi.resizeResults(detections, displaySize);
+
+                    resizedDetections.forEach((detection, index) => {
+                        const { age, gender, genderProbability } = detection;
+                        const expressions = detection.expressions;
+
+                        // Get dominant expression
+                        const dominantExpression = Object.entries(expressions).sort(
+                            ([, a], [, b]) => b - a
+                        )[0];
+
+                        // Determine face quality
+                        const box = detection.detection.box;
+                        const faceArea = box.width * box.height;
+                        const videoArea = canvas.width * canvas.height;
+                        const facePercentage = (faceArea / videoArea) * 100;
+
+                        if (facePercentage > 15 && facePercentage < 80) {
+                            setFaceQuality('✅ Good positioning');
+                        } else if (facePercentage <= 15) {
+                            setFaceQuality('📏 Move closer to camera');
+                        } else {
+                            setFaceQuality('📏 Move back from camera');
+                        }
+                    });
+                }
+
+                // Update detection state
+                setFacesCount(detections.length);
+                setFaceDetected(detections.length > 0);
+
+            } catch (error) {
+                console.error('Detection error:', error);
+            }
+        };
+
+        // Run detection every 100ms (10 FPS for performance)
+        detectionIntervalRef.current = setInterval(detectFaces, 100);
+
+        return () => {
+            if (detectionIntervalRef.current) {
+                clearInterval(detectionIntervalRef.current);
+            }
+        };
+    }, [modelsLoaded, isStreaming]);
+
+    // Capture image
+    const handleCapture = async () => {
+        if (!faceDetected) {
+            alert('⚠️ Please face the camera. No face detected!');
             return;
         }
 
-        const base64Image = canvasRef.current.toDataURL('image/jpeg', 0.9);
-        onCapture(base64Image);
+        if (!videoRef.current) return;
+
+        try {
+            const video = videoRef.current;
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+
+            // Convert to base64
+            const base64Image = canvas.toDataURL('image/jpeg', 0.95);
+
+            console.log('✅ Face captured successfully');
+            onCapture(base64Image);
+        } catch (error) {
+            console.error('Capture error:', error);
+            alert('Failed to capture image');
+        }
     };
 
-    if (loading) {
-        return (
-            <div className="flex flex-col items-center justify-center p-8">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
-                <p className="mt-4 text-gray-600">Loading camera...</p>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                <p>{error}</p>
-            </div>
-        );
-    }
-
     return (
-        <div className="flex flex-col items-center justify-center gap-4">
-            <div className="relative">
-                <video
-                    ref={videoRef}
-                    className="hidden"
-                    autoPlay
-                    playsInline
-                />
-                <canvas
-                    ref={canvasRef}
-                    className="border-2 border-gray-300 rounded-lg max-w-md"
-                />
-                {!faceDetected && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-red-500 bg-opacity-20 rounded-lg">
-                        <p className="text-white text-lg font-bold">Face not detected</p>
+        <div className="face-capture-container">
+            <div className="capture-section">
+                <h2>📸 Step 1: Capture Your Face</h2>
+
+                {!modelsLoaded ? (
+                    <div className="loading-state">
+                        <div className="spinner"></div>
+                        <p>Loading face detection models...</p>
+                        <p className="loading-subtitle">This may take 30-60 seconds on first load</p>
                     </div>
+                ) : (
+                    <>
+                        <div className="camera-wrapper">
+                            <div className="camera-container">
+                                <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    className="video-stream"
+                                />
+                                <canvas
+                                    ref={displayCanvasRef}
+                                    className="detection-canvas"
+                                />
+
+                                <div className={`detection-status ${faceDetected ? 'detected' : 'not-detected'}`}>
+                                    {faceDetected ? (
+                                        <>
+                                            <div className="status-icon">✅</div>
+                                            <p>Face Detected!</p>
+                                            <p className="subtitle">{facesCount} face(s) found</p>
+                                            {faceQuality && <p className="quality">{faceQuality}</p>}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="status-icon">⚠️</div>
+                                            <p>Face Not Detected</p>
+                                            <p className="subtitle">Please face the camera</p>
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* Positioning guide */}
+                                <div className="positioning-guide">
+                                    <div className="face-outline"></div>
+                                    <p className="guide-text">Position your face within the oval</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="capture-controls">
+                            <button
+                                onClick={handleCapture}
+                                disabled={!faceDetected}
+                                className={`capture-button ${faceDetected ? 'active' : 'disabled'}`}
+                            >
+                                📸 Capture Face
+                            </button>
+
+                            {!faceDetected && (
+                                <p className="help-text">
+                                    💡 Look at the camera, keep your face centered in the frame
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="detection-info">
+                            <p>🎯 <strong>Detection Status:</strong> {faceDetected ? '✅ Ready to capture' : '⏳ Waiting for face'}</p>
+                            <p>👥 <strong>Faces Detected:</strong> {facesCount}</p>
+                            <p>📹 <strong>Camera:</strong> {isStreaming ? '🟢 Active' : '🔴 Inactive'}</p>
+                            <p>📊 <strong>Quality:</strong> {faceQuality || '—'}</p>
+                        </div>
+
+                        <div className="tips-section">
+                            <h3>✨ Tips for Best Results:</h3>
+                            <ul>
+                                <li>🔆 Ensure good lighting on your face</li>
+                                <li>📐 Keep your face centered in the frame</li>
+                                <li>😐 Look directly at the camera</li>
+                                <li>🎯 Fill about 30-50% of the frame with your face</li>
+                                <li>❌ Remove sunglasses or hats if possible</li>
+                            </ul>
+                        </div>
+                    </>
                 )}
             </div>
-
-            <div className="text-center">
-                <p className="text-gray-600 mb-2">
-                    {faceDetected ? '✅ Face detected!' : '❌ Please face the camera'}
-                </p>
-            </div>
-
-            <button
-                onClick={handleCapture}
-                disabled={!faceDetected}
-                className={`px-6 py-3 rounded-lg font-semibold text-white transition ${faceDetected
-                    ? 'bg-teal-500 hover:bg-teal-600 cursor-pointer'
-                    : 'bg-gray-400 cursor-not-allowed'
-                    }`}
-            >
-                📸 Capture Face
-            </button>
         </div>
     );
 };
