@@ -15,8 +15,13 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://user:password@localhost:5432/face_emotion"
+        "postgresql://faceuser:securepassword123@localhost:5432/face_emotion"
     )
+    
+    # Storage
+    STORAGE_TYPE: str = os.getenv("STORAGE_TYPE", "local")
+    STORAGE_DIR: str = os.getenv("STORAGE_DIR", "./uploads")
+    STORAGE_MAX_SIZE_MB: int = int(os.getenv("STORAGE_MAX_SIZE_MB", "100"))
     
     # AWS S3
     AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
@@ -39,9 +44,22 @@ class Settings(BaseSettings):
     SESSION_EXPIRY_HOURS: int = 24
     SESSION_CLEANUP_INTERVAL_HOURS: int = 1
     
-    # Security
-    CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:8000"]
+    # Pinecone (Optional)
+    PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
+    PINECONE_ENV: str = os.getenv("PINECONE_ENV", "us-east-1-aws")
+    PINECONE_INDEX: str = os.getenv("PINECONE_INDEX", "face-emotion")
     
+    # Security
+    CORS_ORIGINS: list = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000"
+    ]
+    
+    # Logging
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+
     class Config:
         env_file = ".env"
 

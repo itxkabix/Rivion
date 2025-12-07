@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, Float, DateTime, JSON, BYTEA
+from sqlalchemy import create_engine, Column, String, Float, DateTime, JSON, LargeBinary
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
@@ -10,7 +10,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 Base = declarative_base()
-engine = create_engine(settings.DATABASE_URL, echo=False)
+engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
 # Models
@@ -20,7 +20,7 @@ class SessionUser(Base):
     user_name = Column(String)
     captured_image_base64 = Column(String)
     captured_image_path = Column(String)
-    embedding = Column(BYTEA)
+    embedding = Column(LargeBinary)  # Changed from BYTEA to LargeBinary
     status = Column(String, default='searching')
     privacy_policy_agreed = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
